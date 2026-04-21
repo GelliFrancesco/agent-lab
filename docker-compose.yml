@@ -1,0 +1,52 @@
+services:
+
+  soccer-dashboard:
+    build:
+      context: ./projects/soccer_dashboard
+      dockerfile: Dockerfile
+    container_name: soccer-dashboard
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./projects/soccer_dashboard/.auth:/app/.auth
+    environment:
+      - FLASK_ENV=production
+    env_file:
+      - ./agent.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  code-gym:
+    build:
+      context: ./projects/code-gym
+      dockerfile: Dockerfile
+    container_name: code-gym
+    ports:
+      - "5051:5051"
+    volumes:
+      - ./projects/code-gym/data:/app/data
+      - ./projects/code-gym/app/.auth:/app/.auth
+    env_file:
+      - ./agent.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5051/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Example: uncomment when you add news_aggregator project
+  # news-aggregator:
+  #   build:
+  #     context: ./projects/news_aggregator
+  #     dockerfile: Dockerfile
+  #   container_name: news-aggregator
+  #   ports:
+  #     - "5052:5052"
+  #   env_file:
+  #     - ./agent.env
+  #   restart: unless-stopped

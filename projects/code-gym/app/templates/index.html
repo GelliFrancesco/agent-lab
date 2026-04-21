@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Gym — Select Your Profile</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0d1117;--surface:#161b22;--border:#21262d;--hover:#1c2128;
+    --cyan:#58a6ff;--green:#3fb950;--red:#f85149;--gold:#d29922;
+    --text:#e6edf3;--muted:#8b949e;--sub:#6e7681;
+  }
+  body{
+    font-family:'Inter','Segoe UI',system-ui,sans-serif;
+    background:var(--bg);color:var(--text);min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:2rem;
+  }
+  .container{max-width:500px;width:100%}
+  .logo{text-align:center;margin-bottom:2rem}
+  .logo-icon{font-size:3rem}
+  h1{
+    font-size:2rem;font-weight:800;letter-spacing:-0.03em;
+    background:linear-gradient(135deg,#58a6ff,#79c0ff);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-top:.5rem;
+  }
+  .subtitle{color:var(--muted);font-size:.9rem;margin-top:.3rem}
+  .card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:2rem;box-shadow:0 8px 32px rgba(0,0,0,.4);
+  }
+  .section-title{
+    font-size:.7rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--sub);margin-bottom:1rem;
+  }
+  .user-list{display:flex;flex-direction:column;gap:.75rem}
+  .user-btn{
+    display:flex;align-items:center;gap:1rem;
+    background:var(--hover);border:1px solid var(--border);
+    border-radius:12px;padding:1rem 1.25rem;cursor:pointer;
+    transition:all .2s;text-decoration:none;color:inherit;
+    font-size:.95rem;font-weight:600;
+  }
+  .user-btn:hover{border-color:var(--cyan);transform:translateY(-2px)}
+  .user-avatar{
+    width:44px;height:44px;border-radius:50%;
+    background:linear-gradient(135deg,#58a6ff,#1f6feb);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.2rem;font-weight:800;color:#fff;flex-shrink:0;
+  }
+  .user-info .user-name{color:var(--text)}
+  .user-info .user-sub{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .stats-row{display:flex;gap:1.5rem;margin-top:.5rem}
+  .stat{font-size:.72rem;color:var(--sub)}
+  .stat span{color:var(--cyan);font-weight:700}
+  .footer{
+    text-align:center;margin-top:1.5rem;
+    font-size:.75rem;color:var(--sub);
+  }
+  .footer a{color:var(--cyan);text-decoration:none}
+  .badge{
+    background:rgba(63,185,80,.15);color:var(--green);
+    font-size:.65rem;padding:2px 8px;border-radius:20px;font-weight:700;
+    margin-left:auto;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <div class="logo-icon">💪</div>
+    <h1>Code Gym</h1>
+    <p class="subtitle">Pick your profile and start grinding</p>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Select Profile</div>
+    <div class="user-list">
+      {% for user in users %}
+      <a href="/user/{{ user.id }}?token={{ token }}" class="user-btn">
+        <div class="user-avatar">{{ user.name[0] }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ user.name }}</div>
+          <div class="stats-row">
+            <div class="stat">ELO: <span>?</span></div>
+            <div class="stat">Solved: <span>?</span></div>
+          </div>
+        </div>
+        <span class="badge">Active</span>
+      </a>
+      {% endfor %}
+    </div>
+
+    <div class="footer">
+      No account? Just start solving.<br>
+      Code Gym tracks everything automatically.
+    </div>
+  </div>
+</div>
+</body>
+</html>

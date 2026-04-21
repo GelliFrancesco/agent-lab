@@ -1,0 +1,39 @@
+# ── Docker ──────────────────────────────────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+agent.env
+*.env.local
+
+# ── Build artifacts ────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# ── Data & logs (per-instance — never commit) ──────────────────────────────────
+projects/soccer_dashboard/.auth
+projects/soccer_dashboard/data.json
+projects/soccer_dashboard/cache.json
+projects/soccer_dashboard/predictions.json
+projects/soccer_dashboard/fetch.log
+projects/code-gym/app/.auth
+projects/code-gym/data/
+projects/code-gym/data.json
+news_aggregator/*.json
+news_aggregator/*.log
+
+# ── OS artifacts ────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Gym — {{ user.name }}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#21262d;
+    --cyan:#58a6ff;--teal:#39d353;--green:#3fb950;--gold:#d29922;
+    --red:#f85149;--orange:#db6d28;--text:#e6edf3;--muted:#8b949e;--sub:#6e7681;
+    --elo-low:#f85149;--elo-mid:#d29922;--elo-high:#3fb950;--elo-master:#58a6ff;
+  }
+  body{
+    font-family:'Inter','Segoe UI',system-ui,sans-serif;
+    background:var(--bg);color:var(--text);min-height:100vh;padding:1.5rem;
+  }
+  .wrap{max-width:1100px;margin:0 auto}
+
+  /* ── Header ── */
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+  .brand{display:flex;align-items:center;gap:.75rem}
+  .brand-icon{font-size:1.8rem}
+  .brand-text h1{
+    font-size:1.4rem;font-weight:800;letter-spacing:-0.02em;
+    background:linear-gradient(135deg,#58a6ff,#79c0ff);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .user-badge{
+    display:flex;align-items:center;gap:.75rem;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;padding:.5rem 1rem;
+  }
+  .user-avatar{
+    width:36px;height:36px;border-radius:50%;
+    background:linear-gradient(135deg,#58a6ff,#1f6feb);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1rem;font-weight:800;color:#fff;
+  }
+  .elo-display{text-align:right}
+  .elo-number{font-size:1.3rem;font-weight:800;color:var(--cyan)}
+  .elo-level{font-size:.7rem;color:var(--muted)}
+
+  /* ── Nav ── */
+  .nav{display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .nav-btn{
+    padding:.55rem 1.1rem;border-radius:8px;font-size:.8rem;font-weight:600;
+    cursor:pointer;border:none;background:var(--surface);color:var(--muted);
+    transition:all .2s;
+  }
+  .nav-btn.active,.nav-btn:hover{background:var(--cyan);color:#0d1117}
+
+  /* ── Section ── */
+  .section{display:none}
+  .section.active{display:block}
+
+  /* ── Cards ── */
+  .card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;margin-bottom:1.5rem;
+    box-shadow:0 4px 24px rgba(0,0,0,.3);
+  }
+  .card-top{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:1rem 1.25rem;border-bottom:1px solid var(--border);background:#1a2536;
+  }
+  .card-title{
+    font-size:.72rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--sub);
+  }
+
+  /* ── Next Problem ── */
+  .next-problem{background:linear-gradient(135deg,#0d1f3c,#0d2d1f)}
+  .next-problem .card-top{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.2)}
+  .problem-body{padding:1.5rem}
+  .problem-title{font-size:1.2rem;font-weight:800;margin-bottom:.4rem}
+  .problem-meta{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem}
+  .tag{
+    font-size:.7rem;padding:3px 10px;border-radius:20px;font-weight:600;
+  }
+  .tag-easy{background:rgba(63,185,80,.15);color:var(--green)}
+  .tag-medium{background:rgba(210,153,34,.15);color:var(--gold)}
+  .tag-hard{background:rgba(248,81,73,.15);color:var(--red)}
+  .tag-topic{background:rgba(88,166,255,.1);color:var(--cyan)}
+  .tag-company{background:rgba(88,166,255,.1);color:var(--muted)}
+  .problem-hint{
+    background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.15);
+    border-radius:8px;padding:.75rem 1rem;font-size:.82rem;
+    color:var(--muted);margin-bottom:1rem;font-family:monospace;
+  }
+  .problem-actions{display:flex;gap:.75rem;flex-wrap:wrap}
+  .btn{
+    padding:.55rem 1.2rem;border-radius:8px;font-size:.8rem;font-weight:700;
+    cursor:pointer;border:none;transition:all .2s;
+  }
+  .btn-primary{background:var(--cyan);color:#0d1117}
+  .btn-primary:hover{background:#79c0ff;transform:translateY(-1px)}
+  .btn-success{background:var(--green);color:#0d1117}
+  .btn-danger{background:rgba(248,81,73,.2);color:var(--red);border:1px solid var(--red)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+  /* ── Stats Row ── */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem;padding:1.25rem}
+  .stat-card{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:12px;padding:1rem;text-align:center;
+  }
+  .stat-number{font-size:1.6rem;font-weight:800;color:var(--cyan)}
+  .stat-label{font-size:.7rem;color:var(--muted);margin-top:.2rem;text-transform:uppercase;letter-spacing:.05em}
+
+  /* ── Topic Bars ── */
+  .topic-list{padding:1rem}
+  .topic-row{display:flex;align-items:center;gap:1rem;margin-bottom:.9rem}
+  .topic-name{
+    font-size:.78rem;font-weight:600;color:var(--text);width:140px;flex-shrink:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .elo-bar-bg{
+    flex:1;height:8px;background:var(--hover);border-radius:4px;overflow:hidden;
+  }
+  .elo-bar{height:100%;border-radius:4px;transition:width .5s ease}
+  .elo-value{font-size:.72rem;font-weight:700;width:40px;text-align:right;flex-shrink:0}
+  .level-badge{
+    font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:10px;
+    width:70px;text-align:center;flex-shrink:0;
+  }
+  .level-master{background:rgba(88,166,255,.2);color:var(--cyan)}
+  .level-advanced{background:rgba(63,185,80,.2);color:var(--green)}
+  .level-intermediate{background:rgba(210,153,34,.2);color:var(--gold)}
+  .level-novice{background:rgba(248,81,73,.15);color:#f0883e}
+  .level-beginner{background:rgba(248,81,73,.1);color:var(--red)}
+
+  /* ── History ── */
+  .history-list{padding:.5rem}
+  .history-item{
+    display:flex;align-items:center;gap:1rem;padding:.8rem 1rem;
+    border-bottom:1px solid var(--border);transition:background .15s;
+  }
+  .history-item:last-child{border-bottom:none}
+  .history-item:hover{background:var(--hover)}
+  .history-icon{font-size:1.1rem;flex-shrink:0}
+  .history-info{flex:1;min-width:0}
+  .history-title{font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .history-meta{font-size:.7rem;color:var(--muted);margin-top:2px}
+  .history-elo{font-size:.75rem;font-weight:700;flex-shrink:0}
+  .elo-up{color:var(--green)}.elo-down{color:var(--red)}.elo-neutral{color:var(--muted)}
+
+  /* ── Log Modal ── */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+    z-index:100;align-items:center;justify-content:center;padding:1rem;
+  }
+  .modal-overlay.open{display:flex}
+  .modal{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:2rem;max-width:420px;width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal h2{font-size:1.1rem;margin-bottom:.3rem}
+  .modal p{font-size:.82rem;color:var(--muted);margin-bottom:1.5rem}
+  .form-group{margin-bottom:1rem}
+  .form-group label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.05em}
+  .form-group input{
+    width:100%;padding:.65rem 1rem;border-radius:8px;border:1px solid var(--border);
+    background:var(--bg);color:var(--text);font-size:.9rem;
+  }
+  .form-group input:focus{outline:none;border-color:var(--cyan)}
+  .modal-actions{display:flex;gap:.75rem;margin-top:1.5rem}
+
+  @media(max-width:600px){
+    body{padding:1rem}
+    .topic-name{width:90px;font-size:.72rem}
+    .elo-value{width:30px}
+    .level-badge{width:55px;font-size:.55rem}
+  }
+  .timer-display{
+    font-size:2.2rem;font-weight:900;color:var(--cyan);
+    font-family:'Courier New',monospace;text-align:center;
+    letter-spacing:.05em;
+  }
+  .timer-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;text-align:center;margin-bottom:.3rem}
+  .timer-row{display:flex;justify-content:center;align-items:center;gap:1rem;margin:.75rem 0}
+  .timer-btns{display:flex;justify-content:center;gap:.5rem;margin-bottom:.5rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <span class="brand-icon">💪</span>
+      <div class="brand-text">
+        <h1>Code Gym</h1>
+      </div>
+    </div>
+    <div class="user-badge">
+      <div class="user-avatar">{{ user.name[0] }}</div>
+      <div class="elo-display">
+        <div class="elo-number">{{ overall_elo }}</div>
+        <div class="elo-level">{{ skill }}</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <div class="nav">
+    <button class="nav-btn active" data-tab="dashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
+    <button class="nav-btn" data-tab="practice" onclick="showTab('practice')">🎯 Practice</button>
+    <button class="nav-btn" data-tab="topics" onclick="showTab('topics')">📈 Topics</button>
+    <button class="nav-btn" data-tab="history" onclick="showTab('history')">📋 History</button>
+    <button class="nav-btn" data-tab="leaderboard" onclick="showTab('leaderboard')">🏆 Leaderboard</button>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div id="tab-dashboard" class="section active">
+
+    <!-- Next Problem -->
+    <div class="card next-problem">
+      <div class="card-top">
+        <span class="card-title">🎯 Next Problem</span>
+        <button class="btn btn-primary" onclick="resetTimer();getRecommendation()" style="padding:.4rem .9rem;font-size:.75rem">↻ New Pick</button>
+      </div>
+    <div class="timer-row">
+      <div style="text-align:center">
+        <div class="timer-label">⏱️ Time Spent</div>
+        <div class="timer-display" id="timer-display">00:00</div>
+        <div class="timer-btns">
+          <button class="btn" id="timer-start" style="background:var(--green);color:#0d1117;font-size:.75rem;padding:.35rem .8rem" onclick="startTimer()">▶ Start</button>
+          <button class="btn" id="timer-pause" style="background:var(--gold);color:#0d1117;font-size:.75rem;padding:.35rem .8rem" onclick="pauseTimer()" disabled>⏸ Pause</button>
+          <button class="btn" style="background:var(--hover);color:var(--muted);font-size:.75rem;padding:.35rem .8rem" onclick="resetTimer()">↺ Reset</button>
+        </div>
+      </div>
+    </div>
+    <div id="problem-content">
+      <div style="text-align:center;padding:1.5rem;color:var(--muted)">
+        <div style="font-size:2rem;margin-bottom:.5rem">🎲</div>
+        <div style="font-size:.9rem">Click "New Pick" to get your next problem</div>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number" style="color:var(--cyan)">{{ solved_count }}</div>
+        <div class="stat-label">Solved</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color:var(--red)">{{ giveups }}</div>
+        <div class="stat-label">Given Up</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ topic_elos|length }}</div>
+        <div class="stat-label">Topics</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color:var(--green)">{{ overall_elo }}</div>
+        <div class="stat-label">Overall ELO</div>
+      </div>
+    </div>
+
+    <!-- Weak Areas -->
+    <div class="card">
+      <div class="card-top"><span class="card-title">⚠️ Weak Areas</span></div>
+      <div class="topic-list">
+        {% for t in weak_topics %}
+        <div class="topic-row">
+          <div class="topic-name">{{ t.topic }}</div>
+          <div class="elo-bar-bg">
+            <div class="elo-bar" style="width:{{ ((t.elo - min_elo) / (max_elo - min_elo)) * 100 }}%;background:var(--red)"></div>
+          </div>
+          <div class="elo-value" style="color:var(--red)">{{ t.elo }}</div>
+          <div class="level-badge level-{{ topic_from_elo(t.elo).lower() }}">{{ topic_from_elo(t.elo) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PRACTICE TAB -->
+  <div id="tab-practice" class="section">
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">🎯 Browse Problems</span>
+        <div style="display:flex;gap:.5rem">
+          <select id="filter-difficulty" onchange="loadProblems()" style="padding:.35rem .6rem;border-radius:6px;background:var(--hover);color:var(--text);border:1px solid var(--border);font-size:.75rem">
+            <option value="">All Difficulties</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+          <select id="filter-topic" onchange="loadProblems()" style="padding:.35rem .6rem;border-radius:6px;background:var(--hover);color:var(--text);border:1px solid var(--border);font-size:.75rem">
+            <option value="">All Topics</option>
+            {% for t in topic_elos %}
+            <option value="{{ t.topic }}">{{ t.topic }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div id="problems-list" style="padding:.5rem">
+        <div style="text-align:center;padding:2rem;color:var(--muted)">Loading problems...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOPICS TAB -->
+  <div id="tab-topics" class="section">
+    <div class="card">
+      <div class="card-top"><span class="card-title">📈 Topic ELO Progress</span></div>
+      <div class="topic-list">
+        {% for t in topic_elos|sort(attribute='elo', reverse=true) %}
+        <div class="topic-row">
+          <div class="topic-name">{{ t.topic }}</div>
+          <div class="elo-bar-bg">
+            <div class="elo-bar" style="width:{{ ((t.elo - min_elo) / (max_elo - min_elo)) * 100 }}%;background:
+              {% if t.elo >= 1800 %}var(--cyan)
+              {% elif t.elo >= 1500 %}var(--green)
+              {% elif t.elo >= 1300 %}var(--gold)
+              {% else %}var(--red){% endif %}">
+            </div>
+          </div>
+          <div class="elo-value" style="color:
+            {% if t.elo >= 1800 %}var(--cyan)
+            {% elif t.elo >= 1500 %}var(--green)
+            {% elif t.elo >= 1300 %}var(--gold)
+            {% else %}var(--red){% endif %}">
+            {{ t.elo }}
+          </div>
+          <div class="level-badge level-{{ topic_from_elo(t.elo).lower() }}">{{ topic_from_elo(t.elo) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" class="section">
+    <div class="card">
+      <div class="card-top"><span class="card-title">📋 Recent Attempts</span></div>
+      <div class="history-list">
+        {% for attempt, problem in attempts %}
+        <div class="history-item">
+          <div class="history-icon">{% if attempt.solved %}✅{% elif attempt.gave_up %}❌{% else %}⏳{% endif %}</div>
+          <div class="history-info">
+            <div class="history-title">{{ problem.title }}</div>
+            <div class="history-meta">
+              {{ problem.difficulty.value }} · {{ problem.topics.split(',')[0] }} ·
+              {{ attempt.time_minutes }}min · {{ attempt.attempts_count }} attempt(s)
+            </div>
+          </div>
+          <div class="history-elo {% if attempt.elo_after and attempt.elo_before %}{% if attempt.elo_after > attempt.elo_before %}elo-up{% elif attempt.elo_after < attempt.elo_before %}elo-down{% else %}elo-neutral{% endif %}{% endif %}">
+            {% if attempt.elo_after and attempt.elo_before %}
+              {% set delta = attempt.elo_after - attempt.elo_before %}
+              {% if delta > 0 %}+{% endif %}{{ delta }}
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:2rem;color:var(--muted)">No attempts yet. Start solving!</div>
+        {% endfor %}
+      </div>
+    </div>
+  <!-- LEADERBOARD TAB -->
+  <div id="tab-leaderboard" class="section">
+    <div class="card">
+      <div class="card-top"><span class="card-title">🏆 ELO Rankings</span></div>
+      <div id="leaderboard-body" style="padding:1rem;text-align:center;color:var(--muted)">Loading...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- LOG ATTEMPT MODAL -->
+<div class="modal-overlay" id="log-modal">
+  <div class="modal">
+    <h2 id="modal-problem-title">Log Your Attempt</h2>
+    <p id="modal-problem-meta"></p>
+    <div class="form-group">
+      <label>Time (minutes)</label>
+      <input type="number" id="input-time" placeholder="e.g. 25" min="0" max="300">
+    </div>
+    <div class="form-group">
+      <label>Number of attempts</label>
+      <input type="number" id="input-attempts" placeholder="e.g. 2" min="1" max="50" value="1">
+    </div>
+    <div style="display:flex;gap:.75rem;margin-bottom:1rem">
+      <button class="btn btn-success" style="flex:1" onclick="logAttempt(true)">✅ Solved</button>
+      <button class="btn btn-danger" style="flex:1" onclick="logAttempt(false)">❌ Give Up</button>
+    </div>
+    <button class="btn" style="width:100%;background:var(--hover);color:var(--muted)" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+const USER_ID = {{ user.id }};
+const TOKEN = "{{ token }}";
+let currentSlug = null;
+let currentProblem = null;
+let currentUrl = null;
+let timerSeconds = 0;
+let timerInterval = null;
+let timerRunning = false;
+
+function formatTime(s){
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  if(h>0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function updateTimerDisplay(){ document.getElementById('timer-display').textContent=formatTime(timerSeconds); }
+function startTimer(){
+  if(timerRunning) return;
+  timerRunning=true;
+  document.getElementById('timer-start').disabled=true;
+  document.getElementById('timer-pause').disabled=false;
+  timerInterval=setInterval(()=>{ timerSeconds++; updateTimerDisplay(); },1000);
+  if(currentUrl) window.open(currentUrl, '_blank');
+}
+function pauseTimer(){
+  if(!timerRunning) return;
+  timerRunning=false;
+  clearInterval(timerInterval);
+  document.getElementById('timer-start').disabled=false;
+  document.getElementById('timer-pause').disabled=true;
+}
+function resetTimer(){
+  pauseTimer();
+  timerSeconds=0;
+  updateTimerDisplay();
+}
+async function logDone(){
+  pauseTimer();
+  if(!currentSlug){ resetTimer(); return; }
+  const time = getElapsedMinutes();
+  try {
+    const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({slug:currentSlug, solved:true, gave_up:false, time_minutes:time, attempts_count:1})
+    });
+    const data = await res.json();
+    resetTimer();
+    const delta = data.delta || 0;
+    const sign = delta >= 0 ? '+' : '';
+    document.getElementById('problem-content').innerHTML = `
+      <div style="text-align:center;padding:2rem">
+        <div style="font-size:3rem;margin-bottom:.5rem">🎉</div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--green);margin-bottom:.3rem">Solved!</div>
+        <div style="font-size:.85rem;color:var(--muted)">Time: ${formatTime(timerSeconds)} · ELO: ${sign}${delta}</div>
+        <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
+      </div>`;
+    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 1500);
+  } catch(e){
+    resetTimer();
+    alert('Error logging attempt');
+  }
+}
+function getElapsedMinutes(){ return Math.ceil(timerSeconds/60); }
+
+function showTab(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelector(`.nav-btn[data-tab='${id}']`).classList.add('active');
+  if(id==='practice') loadProblems();
+  if(id==='dashboard') getRecommendation();
+  if(id==='leaderboard') loadLeaderboard();
+}
+async function loadLeaderboard(){
+  const body = document.getElementById('leaderboard-body');
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)">Loading...</div>';
+  try {
+    const res = await fetch(`/api/leaderboard?token=${TOKEN}`);
+    const users = await res.json();
+    if(!users.length){ body.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted)">No data yet</div>'; return; }
+    body.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr style="border-bottom:1px solid var(--border)">' +
+      '<th style="text-align:left;padding:.6rem;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">#</th>' +
+      '<th style="text-align:left;padding:.6rem;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">User</th>' +
+      '<th style="text-align:right;padding:.6rem;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">ELO</th>' +
+      '<th style="text-align:right;padding:.6rem;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Solved</th>' +
+      '<th style="text-align:right;padding:.6rem;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Level</th></tr></thead><tbody>' +
+      users.map((u,i)=>{
+        const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+        const rowColor = u.id===USER_ID?'background:rgba(88,166,255,.05)':'';
+        return `<tr style="border-bottom:1px solid var(--border);${rowColor}">` +
+          `<td style="padding:.7rem;font-size:.9rem;font-weight:800;color:${i<3?'var(--gold)':'var(--muted)'}">${medal||i+1}</td>` +
+          `<td style="padding:.7rem"><span style="font-weight:700">${u.name}</span>${u.id===USER_ID?' <span style="font-size:.65rem;color:var(--cyan)">(you)</span>':''}</td>` +
+          `<td style="text-align:right;padding:.7rem;font-weight:800;color:var(--cyan)">${u.elo}</td>` +
+          `<td style="text-align:right;padding:.7rem;color:var(--green)">${u.solved}</td>` +
+          `<td style="text-align:right;padding:.7rem"><span class="level-badge level-${u.level.toLowerCase()}">${u.level}</span></td></tr>`;
+      }).join('') + '</tbody></table>';
+  } catch(e){
+    body.innerHTML='<div style="text-align:center;padding:2rem;color:var(--red)">Error loading leaderboard</div>';
+  }
+}
+
+async function getRecommendation(){
+  const content = document.getElementById('problem-content');
+  content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">🤖 Agent analyzing your profile...</div>';
+  try {
+    const res = await fetch(`/api/recommend/${USER_ID}?token=${TOKEN}`);
+    const data = await res.json();
+    currentProblem = data;
+    currentSlug = data.slug;
+    currentUrl = data.leetcode_url;
+    const hint = data.pattern_hint || 'No hint available';
+    const topics = (data.topics||'').split(',').slice(0,2);
+    const companies = (data.companies||'').split(',').slice(0,2);
+    const content = document.getElementById('problem-content');
+    content.innerHTML = `
+      <div class="problem-title">${data.title}</div>
+      <div class="problem-meta">
+        <span class="tag tag-${data.difficulty.toLowerCase()}">${data.difficulty}</span>
+        <span id="topic-toggle-btn" class="btn" style="font-size:.7rem;padding:.25rem .6rem;background:var(--surface2);color:var(--muted);cursor:pointer" onclick="toggleTopics(this,'${data.topics}','${data.companies}','${hint}')">👁 Show hint</span>
+      </div>
+      <div id="topic-reveal" style="display:none;margin-top:.75rem"></div>
+      <div class="problem-actions" style="margin-top:1rem">
+        <button class="btn" style="background:var(--green);color:#0d1117;font-weight:800;font-size:.9rem;padding:.6rem 1.4rem" onclick="logDone()">🎉 I'm Done!</button>
+        <button class="btn btn-primary" onclick="window.open('${data.leetcode_url}','_blank')">📝 LeetCode</button>
+        <button class="btn" style="background:var(--hover);color:var(--muted)" onclick="resetTimer();getRecommendation()">↻ Skip</button>
+      </div>
+      ${data.reason ? `<div style="margin-top:.75rem;font-size:.75rem;color:var(--muted);font-style:italic">${data.reason}</div>` : ''}
+    `;
+  } catch(e){
+    content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red)">Error loading recommendation</div>';
+  }
+}
+function toggleTopics(btn,topics,companies,hint){
+  const div = document.getElementById('topic-reveal');
+  if(div.style.display==='none'){
+    div.style.display='block';
+    div.innerHTML=`
+      <div style="margin-bottom:.5rem">${topics.split(',').map(t=>`<span class="tag tag-topic">${t.trim()}</span>`).join(' ')} ${companies.map(c=>`<span class="tag tag-company">${c.trim()}</span>`).join(' ')}</div>
+      <div class="problem-hint">💡 ${hint}</div>`;
+    btn.textContent='🙈 Hide hint';
+  } else {
+    div.style.display='none';
+    btn.textContent='👁 Show hint';
+  }
+}
+
+function openLogModal(slug, title, difficulty){
+  currentSlug = slug;
+  pauseTimer();
+  document.getElementById('modal-problem-title').textContent = title;
+  document.getElementById('modal-problem-meta').textContent = difficulty;
+  document.getElementById('input-time').value = getElapsedMinutes();
+  document.getElementById('input-attempts').value = '1';
+  document.getElementById('log-modal').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('log-modal').classList.remove('open');
+}
+
+async function logAttempt(solved){
+  pauseTimer();
+  const time = parseInt(document.getElementById('input-time').value) || getElapsedMinutes();
+  const attempts = parseInt(document.getElementById('input-attempts').value) || 1;
+  try {
+    const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({slug:currentSlug, solved, gave_up:!solved, time_minutes:time, attempts_count:attempts})
+    });
+    const data = await res.json();
+    closeModal();
+    resetTimer();
+    getRecommendation();
+  } catch(e){
+    alert('Error logging attempt');
+  }
+}
+
+async function loadProblems(){
+  const diff = document.getElementById('filter-difficulty').value;
+  const topic = document.getElementById('filter-topic').value;
+  const params = new URLSearchParams({token:TOKEN});
+  if(diff) params.set('difficulty', diff);
+  if(topic) params.set('topic', topic);
+  const res = await fetch(`/api/problems?${params}`);
+  const problems = await res.json();
+  const list = document.getElementById('problems-list');
+  if(problems.length===0){
+    list.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted)">No problems match this filter</div>';
+    return;
+  }
+  list.innerHTML = problems.map(p=>`
+    <div class="history-item" style="cursor:pointer" onclick="selectProblem('${p.slug}','${p.title}','${p.difficulty}')">
+      <div class="history-icon">📋</div>
+      <div class="history-info">
+        <div class="history-title">${p.title}</div>
+        <div class="history-meta">${p.difficulty} · ${(p.topics||'').split(',')[0]} · ⭐${p.importance}/10</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectProblem(slug,title,difficulty){
+  openLogModal(slug, title, difficulty);
+}
+
+// Load first recommendation on page load
+window.addEventListener('DOMContentLoaded', ()=>{
+  {% if not attempts %}
+  getRecommendation();
+  {% endif %}
+});
+</script>
+</body>
+</html>
