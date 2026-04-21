@@ -89,23 +89,21 @@ docker-compose down -v
 
 ---
 
-## 👥 For Your Sister (Cate)
+## 👥 Collaborating
+
+Both of you clone and work on the same repo:
 
 ```bash
-# 1. Fork the repo on GitHub (click "Fork" on GitHub)
-
-# 2. Clone her fork
-git clone https://github.com/SISTER_USERNAME/agent-lab.git
+# Clone
+git clone https://github.com/GelliFrancesco/agent-lab.git
 cd agent-lab
 
-# 3. Start
+# Start
 docker-compose up --build -d
 
-# 4. Find tokens
+# Find tokens
 docker-compose logs
 ```
-
-Then open the URLs from the startup banner with the tokens shown.
 
 To contribute:
 ```bash
@@ -114,8 +112,10 @@ git checkout -b add-new-feature
 git add .
 git commit -m "Add amazing feature"
 git push origin add-new-feature
-# → Open a Pull Request on GitHub
 ```
+
+**Ask Francesco to add you as a collaborator** at:
+`https://github.com/GelliFrancesco/agent-lab/settings/access`
 
 ---
 
