@@ -100,6 +100,27 @@ seed_users()
 INITIAL_ELO = 1200
 MIN_ELO, MAX_ELO = 800, 2400
 
+# Thresholds and gains per difficulty level.
+# "Fast" requires BOTH attempt and time conditions to be met.
+_ELO_CFG = {
+    "Easy":   dict(fast_attempts=1, fast_time=15, norm_attempts=2, norm_time=30,
+                   win_fast=20,  win_norm=10, win_slow=5,  lose=-10),
+    "Medium": dict(fast_attempts=1, fast_time=25, norm_attempts=3, norm_time=50,
+                   win_fast=35,  win_norm=18, win_slow=8,  lose=-15),
+    "Hard":   dict(fast_attempts=2, fast_time=45, norm_attempts=5, norm_time=90,
+                   win_fast=50,  win_norm=25, win_slow=10, lose=-10),
+}
+
+def compute_elo_delta(difficulty, attempts_count, time_minutes, gave_up, solved):
+    cfg = _ELO_CFG.get(difficulty, _ELO_CFG["Medium"])
+    if not solved:
+        return cfg["lose"]
+    if attempts_count <= cfg["fast_attempts"] and time_minutes <= cfg["fast_time"]:
+        return cfg["win_fast"]
+    if attempts_count <= cfg["norm_attempts"] and time_minutes <= cfg["norm_time"]:
+        return cfg["win_norm"]
+    return cfg["win_slow"]
+
 def update_elo(user_id, topic, delta):
     db = get_db()
     te = db.query(TopicElo).filter_by(user_id=user_id, topic=topic).first()
@@ -234,20 +255,9 @@ def api_log_attempt(user_id):
     te = db.query(TopicElo).filter_by(user_id=user_id, topic=primary_topic).first()
     elo_before = te.elo if te else INITIAL_ELO
 
-    # Calculate delta
-    if not solved and gave_up:
-        delta = -20
-    elif solved:
-        if attempts_count == 1 and time_minutes <= 20:
-            delta = 30
-        elif attempts_count <= 3 and time_minutes <= 45:
-            delta = 15
-        else:
-            delta = 5
-    elif time_minutes > 45:
-        delta = -10
-    else:
-        delta = 0
+    # Calculate delta — scaled by difficulty
+    difficulty_str = problem.difficulty.value if hasattr(problem.difficulty, 'value') else str(problem.difficulty)
+    delta = compute_elo_delta(difficulty_str, attempts_count, time_minutes, gave_up, solved)
 
     elo_after = update_elo(user_id, primary_topic, delta)
 

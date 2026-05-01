@@ -22,26 +22,24 @@ INITIAL_ELO = 1200
 MIN_ELO, MAX_ELO = 800, 2400
 TARGET_ELO_MINUS, TARGET_ELO_PLUS = 50, 150
 
-ELO_WIN_FAST = 30
-ELO_WIN_NORMAL = 15
-ELO_WIN_HARD = 5
-ELO_GIVE_UP = -20
-ELO_TIMEOUT = -10
+_ELO_CFG = {
+    "Easy":   dict(fast_attempts=1, fast_time=15, norm_attempts=2, norm_time=30,
+                   win_fast=20,  win_norm=10, win_slow=5,  lose=-10),
+    "Medium": dict(fast_attempts=1, fast_time=25, norm_attempts=3, norm_time=50,
+                   win_fast=35,  win_norm=18, win_slow=8,  lose=-15),
+    "Hard":   dict(fast_attempts=2, fast_time=45, norm_attempts=5, norm_time=90,
+                   win_fast=50,  win_norm=25, win_slow=10, lose=-10),
+}
 
-
-def compute_elo_change(attempts_count, time_minutes, gave_up, solved):
-    if not solved and gave_up:
-        return ELO_GIVE_UP
-    if solved:
-        if attempts_count == 1 and time_minutes <= 20:
-            return ELO_WIN_FAST
-        elif attempts_count <= 3 and time_minutes <= 45:
-            return ELO_WIN_NORMAL
-        else:
-            return ELO_WIN_HARD
-    if time_minutes > 45:
-        return ELO_TIMEOUT
-    return 0
+def compute_elo_change(difficulty, attempts_count, time_minutes, gave_up, solved):
+    cfg = _ELO_CFG.get(difficulty, _ELO_CFG["Medium"])
+    if not solved:
+        return cfg["lose"]
+    if attempts_count <= cfg["fast_attempts"] and time_minutes <= cfg["fast_time"]:
+        return cfg["win_fast"]
+    if attempts_count <= cfg["norm_attempts"] and time_minutes <= cfg["norm_time"]:
+        return cfg["win_norm"]
+    return cfg["win_slow"]
 
 
 def topic_from_elo(elo):

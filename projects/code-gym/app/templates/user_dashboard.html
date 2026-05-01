@@ -278,6 +278,7 @@
     </div>
 
   </div>
+  </div>
 
   <!-- PRACTICE TAB -->
   <div id="tab-practice" class="section">
@@ -362,6 +363,8 @@
         {% endfor %}
       </div>
     </div>
+  </div>
+
   <!-- LEADERBOARD TAB -->
   <div id="tab-leaderboard" class="section">
     <div class="card">
@@ -402,6 +405,7 @@ let currentUrl = null;
 let timerSeconds = 0;
 let timerInterval = null;
 let timerRunning = false;
+const TIMER_LIMIT = 7200; // 2 hours
 
 function formatTime(s){
   const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
@@ -414,7 +418,11 @@ function startTimer(){
   timerRunning=true;
   document.getElementById('timer-start').disabled=true;
   document.getElementById('timer-pause').disabled=false;
-  timerInterval=setInterval(()=>{ timerSeconds++; updateTimerDisplay(); },1000);
+  timerInterval=setInterval(()=>{
+    timerSeconds++;
+    updateTimerDisplay();
+    if(timerSeconds >= TIMER_LIMIT) autoTimeout();
+  },1000);
   if(currentUrl) window.open(currentUrl, '_blank');
 }
 function pauseTimer(){
@@ -429,6 +437,51 @@ function resetTimer(){
   timerSeconds=0;
   updateTimerDisplay();
 }
+async function giveUp(){
+  pauseTimer();
+  if(!currentSlug){ resetTimer(); return; }
+  const time = getElapsedMinutes();
+  fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({slug:currentSlug, solved:false, gave_up:true, time_minutes:time, attempts_count:1})
+  }).then(res=>res.json()).then(data=>{
+    const delta = data.delta || 0;
+    const sign = delta >= 0 ? '+' : '';
+    document.getElementById('problem-content').innerHTML = `
+      <div style="text-align:center;padding:2rem">
+        <div style="font-size:3rem;margin-bottom:.5rem">🏳️</div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--red);margin-bottom:.3rem">Given Up</div>
+        <div style="font-size:.85rem;color:var(--muted)">Time: ${formatTime(timerSeconds)} · ELO: ${sign}${delta}</div>
+        <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
+      </div>`;
+    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 1500);
+  }).catch(()=>{ resetTimer(); alert('Error logging attempt'); });
+}
+
+async function autoTimeout(){
+  pauseTimer();
+  if(!currentSlug){ resetTimer(); return; }
+  const time = getElapsedMinutes();
+  try {
+    const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({slug:currentSlug, solved:false, gave_up:true, time_minutes:time, attempts_count:1})
+    });
+    const data = await res.json();
+    const delta = data.delta || 0;
+    const sign = delta >= 0 ? '+' : '';
+    document.getElementById('problem-content').innerHTML = `
+      <div style="text-align:center;padding:2rem">
+        <div style="font-size:3rem;margin-bottom:.5rem">⏰</div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--orange);margin-bottom:.3rem">2-Hour Timeout</div>
+        <div style="font-size:.85rem;color:var(--muted)">Time: 2:00:00 · ELO: ${sign}${delta}</div>
+        <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
+      </div>`;
+    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 2000);
+  } catch(e){ resetTimer(); alert('Error logging timeout'); }
+}
+
 async function logDone(){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
@@ -508,8 +561,8 @@ async function getRecommendation(){
     const hint = data.pattern_hint || 'No hint available';
     const topics = (data.topics||'').split(',').slice(0,2);
     const companies = (data.companies||'').split(',').slice(0,2);
-    const content = document.getElementById('problem-content');
-    content.innerHTML = `
+    const box = document.getElementById('problem-content');
+    box.innerHTML = `
       <div class="problem-title">${data.title}</div>
       <div class="problem-meta">
         <span class="tag tag-${data.difficulty.toLowerCase()}">${data.difficulty}</span>
@@ -518,6 +571,7 @@ async function getRecommendation(){
       <div id="topic-reveal" style="display:none;margin-top:.75rem"></div>
       <div class="problem-actions" style="margin-top:1rem">
         <button class="btn" style="background:var(--green);color:#0d1117;font-weight:800;font-size:.9rem;padding:.6rem 1.4rem" onclick="logDone()">🎉 I'm Done!</button>
+        <button class="btn" style="background:rgba(248,81,73,.2);color:var(--red);border:1px solid var(--red);font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="giveUp()">🏳️ Give Up</button>
         <button class="btn btn-primary" onclick="window.open('${data.leetcode_url}','_blank')">📝 LeetCode</button>
         <button class="btn" style="background:var(--hover);color:var(--muted)" onclick="resetTimer();getRecommendation()">↻ Skip</button>
       </div>
