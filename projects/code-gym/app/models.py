@@ -20,6 +20,7 @@ class Attempt(Base):
     time_minutes = Column(Integer, default=0)
     gave_up = Column(Boolean, default=False)
     solved = Column(Boolean, default=False)
+    with_help = Column(Boolean, default=False)
     elo_before = Column(Integer)
     elo_after = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)

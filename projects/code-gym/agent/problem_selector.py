@@ -112,12 +112,13 @@ def get_user_profile(user_id):
     }
 
 
-def get_recommendation(user_id):
+def get_recommendation(user_id, skipped_slugs=None):
     profile = get_user_profile(user_id)
     if not profile:
         return None, "No user found"
 
     session = get_session()
+    excluded = profile["solved_slugs"] | set(skipped_slugs or [])
 
     # Weakest topics
     sorted_topics = sorted(profile["topic_elos"].items(), key=lambda x: x[1])
@@ -133,15 +134,13 @@ def get_recommendation(user_id):
         )
         return fallback, "Welcome! Starting with an Easy classic."
 
-    # Try to find unsolved problem in a weak topic
+    # Try to find unsolved, non-skipped problem in a weak topic
     for topic in weak_topics:
         user_elo = profile["topic_elos"].get(topic, INITIAL_ELO)
-        difficulty = difficulty_from_elo(user_elo)
 
-        # Get unsolved problems in this topic
         unsolved_in_topic = (
             session.query(Problem)
-            .filter(~Problem.slug.in_(profile["solved_slugs"]))
+            .filter(~Problem.slug.in_(excluded))
             .filter(Problem.topics.contains(topic))
             .order_by(Problem.importance.desc())
             .all()
@@ -150,15 +149,19 @@ def get_recommendation(user_id):
         if unsolved_in_topic:
             return unsolved_in_topic[0], f"Weak area: {topic} (ELO: {user_elo}). Focus here."
 
-    # Fallback: any unsolved high-importance problem
+    # Fallback: any unsolved, non-skipped high-importance problem
     unsolved = (
         session.query(Problem)
-        .filter(~Problem.slug.in_(profile["solved_slugs"]))
+        .filter(~Problem.slug.in_(excluded))
         .order_by(Problem.importance.desc())
         .first()
     )
     if unsolved:
         return unsolved, "All weak topics covered. High-importance problem next."
+
+    # All non-skipped problems exhausted — ignore skips and try again
+    if skipped_slugs:
+        return get_recommendation(user_id, skipped_slugs=None)
 
     return None, "🎉 You've solved all seeded problems!"
 

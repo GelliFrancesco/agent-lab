@@ -97,6 +97,7 @@
   .btn-primary{background:var(--cyan);color:#0d1117}
   .btn-primary:hover{background:#79c0ff;transform:translateY(-1px)}
   .btn-success{background:var(--green);color:#0d1117}
+  .btn-help{background:rgba(210,153,34,.2);color:var(--gold);border:1px solid var(--gold)}
   .btn-danger{background:rgba(248,81,73,.2);color:var(--red);border:1px solid var(--red)}
   .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 
@@ -174,6 +175,47 @@
     .elo-value{width:30px}
     .level-badge{width:55px;font-size:.55rem}
   }
+  /* ── Readiness ── */
+  .readiness-overall{
+    display:grid;grid-template-columns:auto 1fr;gap:2rem;align-items:center;
+    padding:1.5rem;
+  }
+  @media(max-width:600px){.readiness-overall{grid-template-columns:1fr;text-align:center}}
+  .score-ring-wrap{display:flex;flex-direction:column;align-items:center;gap:.4rem;flex-shrink:0}
+  .score-ring{width:130px;height:130px}
+  .readiness-text h2{font-size:1.3rem;font-weight:800;margin-bottom:.4rem}
+  .readiness-text p{font-size:.85rem;color:var(--muted);line-height:1.6;margin-bottom:.9rem}
+  .readiness-pills{display:flex;gap:.5rem;flex-wrap:wrap}
+  .r-pill{font-size:.7rem;font-weight:600;padding:.25rem .7rem;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+  .company-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem;padding:1.25rem}
+  .company-card{
+    background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+    padding:1rem;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+  }
+  .company-card:hover,.company-card.selected{border-color:var(--cyan);background:#1a2d40}
+  .company-card.selected::after{
+    content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+    background:var(--cyan);
+  }
+  .co-name{font-size:.78rem;font-weight:700;color:var(--text);margin-bottom:.5rem}
+  .co-score{font-size:1.7rem;font-weight:900;line-height:1}
+  .co-label{font-size:.62rem;font-weight:600;margin-top:.2rem;opacity:.85}
+  .co-bar-bg{height:4px;background:var(--border);border-radius:2px;margin-top:.6rem;overflow:hidden}
+  .co-bar{height:100%;border-radius:2px;transition:width .6s ease}
+  .detail-pane{
+    margin:0 1.25rem 1.25rem;padding:1.25rem;
+    background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+  }
+  .detail-pane h3{font-size:.95rem;font-weight:800;margin-bottom:.75rem}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem}
+  .detail-stat{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.7rem;text-align:center}
+  .detail-stat .n{font-size:1.2rem;font-weight:800;color:var(--cyan)}
+  .detail-stat .l{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:.15rem}
+  .gap-tags{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}
+  .gap-tag{font-size:.7rem;padding:.2rem .6rem;border-radius:6px;background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);font-weight:600}
+  .detail-summary{font-size:.83rem;color:var(--muted);line-height:1.6;margin-top:.75rem}
+  .tier-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--sub);padding:.5rem 1.25rem .25rem}
+
   .timer-display{
     font-size:2.2rem;font-weight:900;color:var(--cyan);
     font-family:'Courier New',monospace;text-align:center;
@@ -211,6 +253,7 @@
     <button class="nav-btn" data-tab="topics" onclick="showTab('topics')">📈 Topics</button>
     <button class="nav-btn" data-tab="history" onclick="showTab('history')">📋 History</button>
     <button class="nav-btn" data-tab="leaderboard" onclick="showTab('leaderboard')">🏆 Leaderboard</button>
+    <button class="nav-btn" data-tab="readiness" onclick="showTab('readiness')">🎓 Readiness</button>
   </div>
 
   <!-- DASHBOARD TAB -->
@@ -220,7 +263,13 @@
     <div class="card next-problem">
       <div class="card-top">
         <span class="card-title">🎯 Next Problem</span>
-        <button class="btn btn-primary" onclick="resetTimer();getRecommendation()" style="padding:.4rem .9rem;font-size:.75rem">↻ New Pick</button>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span id="skip-badge" onclick="clearSkips()" title="Click to clear skipped problems"
+            style="display:none;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:20px;
+            background:rgba(210,153,34,.15);color:var(--gold);cursor:pointer;border:1px solid rgba(210,153,34,.3)">
+          </span>
+          <button class="btn btn-primary" onclick="resetTimer();getRecommendation()" style="padding:.4rem .9rem;font-size:.75rem">↻ New Pick</button>
+        </div>
       </div>
     <div class="timer-row">
       <div style="text-align:center">
@@ -343,7 +392,7 @@
       <div class="history-list">
         {% for attempt, problem in attempts %}
         <div class="history-item">
-          <div class="history-icon">{% if attempt.solved %}✅{% elif attempt.gave_up %}❌{% else %}⏳{% endif %}</div>
+          <div class="history-icon">{% if attempt.solved %}{% if attempt.with_help %}🤝{% else %}✅{% endif %}{% elif attempt.gave_up %}❌{% else %}⏳{% endif %}</div>
           <div class="history-info">
             <div class="history-title">{{ problem.title }}</div>
             <div class="history-meta">
@@ -370,6 +419,13 @@
     <div class="card">
       <div class="card-top"><span class="card-title">🏆 ELO Rankings</span></div>
       <div id="leaderboard-body" style="padding:1rem;text-align:center;color:var(--muted)">Loading...</div>
+    </div>
+  </div>
+
+  <!-- READINESS TAB -->
+  <div id="tab-readiness" class="section">
+    <div id="readiness-body">
+      <div style="text-align:center;padding:3rem;color:var(--muted)">Loading your readiness report...</div>
     </div>
   </div>
 
@@ -407,6 +463,18 @@ let timerInterval = null;
 let timerRunning = false;
 const TIMER_LIMIT = 7200; // 2 hours
 
+function getSkipped(){ return new Set(JSON.parse(sessionStorage.getItem('skipped')||'[]')); }
+function saveSkipped(set){ sessionStorage.setItem('skipped', JSON.stringify([...set])); }
+function addSkip(slug){ const s=getSkipped(); s.add(slug); saveSkipped(s); updateSkipBadge(); }
+function clearSkips(){ saveSkipped(new Set()); updateSkipBadge(); getRecommendation(); }
+function updateSkipBadge(){
+  const n = getSkipped().size;
+  const badge = document.getElementById('skip-badge');
+  if(!badge) return;
+  if(n > 0){ badge.textContent = `⏭ ${n} skipped — clear`; badge.style.display='inline'; }
+  else { badge.style.display='none'; }
+}
+
 function formatTime(s){
   const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
   if(h>0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
@@ -437,9 +505,12 @@ function resetTimer(){
   timerSeconds=0;
   updateTimerDisplay();
 }
+function removeFromSkips(slug){ const s=getSkipped(); s.delete(slug); saveSkipped(s); updateSkipBadge(); }
+
 async function giveUp(){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
+  removeFromSkips(currentSlug);
   const time = getElapsedMinutes();
   fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
     method:'POST',
@@ -462,6 +533,7 @@ async function giveUp(){
 async function autoTimeout(){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
+  removeFromSkips(currentSlug);
   const time = getElapsedMinutes();
   try {
     const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
@@ -482,34 +554,58 @@ async function autoTimeout(){
   } catch(e){ resetTimer(); alert('Error logging timeout'); }
 }
 
-async function logDone(){
+async function logDone(withHelp=false){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
+  removeFromSkips(currentSlug);
   const time = getElapsedMinutes();
+  const elapsed = timerSeconds;
   try {
     const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({slug:currentSlug, solved:true, gave_up:false, time_minutes:time, attempts_count:1})
+      body: JSON.stringify({slug:currentSlug, solved:true, gave_up:false, time_minutes:time, attempts_count:1, with_help:withHelp})
     });
     const data = await res.json();
     resetTimer();
     const delta = data.delta || 0;
     const sign = delta >= 0 ? '+' : '';
+    const difficulty = currentProblem ? currentProblem.difficulty : 'Medium';
+    let ratingHtml = '';
+    if(withHelp){
+      ratingHtml = `<div style="margin:.5rem auto;display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(210,153,34,.15);color:var(--gold);border:1px solid rgba(210,153,34,.3)">🤝 With Help</div>`;
+    } else {
+      const r = getTimeRating(difficulty, time);
+      ratingHtml = `<div style="margin:.5rem auto;display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(88,166,255,.1);color:${r.color};border:1px solid ${r.color}40">${r.emoji} ${r.label}</div>`;
+    }
     document.getElementById('problem-content').innerHTML = `
       <div style="text-align:center;padding:2rem">
-        <div style="font-size:3rem;margin-bottom:.5rem">🎉</div>
-        <div style="font-size:1.1rem;font-weight:800;color:var(--green);margin-bottom:.3rem">Solved!</div>
-        <div style="font-size:.85rem;color:var(--muted)">Time: ${formatTime(timerSeconds)} · ELO: ${sign}${delta}</div>
+        <div style="font-size:3rem;margin-bottom:.5rem">${withHelp ? '🤝' : '🎉'}</div>
+        <div style="font-size:1.1rem;font-weight:800;color:${withHelp ? 'var(--gold)' : 'var(--green)'};margin-bottom:.3rem">${withHelp ? 'Solved with Help' : 'Solved!'}</div>
+        ${ratingHtml}
+        <div style="font-size:.85rem;color:var(--muted);margin-top:.4rem">Time: ${formatTime(elapsed)} · ELO: ${sign}${delta}</div>
         <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
       </div>`;
-    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 1500);
+    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 2000);
   } catch(e){
     resetTimer();
     alert('Error logging attempt');
   }
 }
+function logDoneWithHelp(){ logDone(true); }
 function getElapsedMinutes(){ return Math.ceil(timerSeconds/60); }
+
+const TIME_THRESHOLDS = {
+  'Easy':   {fast:15, norm:30},
+  'Medium': {fast:25, norm:50},
+  'Hard':   {fast:45, norm:90},
+};
+function getTimeRating(difficulty, minutes){
+  const t = TIME_THRESHOLDS[difficulty] || TIME_THRESHOLDS['Medium'];
+  if(minutes <= t.fast) return {emoji:'⚡', label:'Lightning Fast!', color:'var(--cyan)'};
+  if(minutes <= t.norm) return {emoji:'✅', label:'On Track', color:'var(--green)'};
+  return {emoji:'🐢', label:'Slow & Steady', color:'var(--gold)'};
+}
 
 function showTab(id){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -519,6 +615,7 @@ function showTab(id){
   if(id==='practice') loadProblems();
   if(id==='dashboard') getRecommendation();
   if(id==='leaderboard') loadLeaderboard();
+  if(id==='readiness') loadReadiness();
 }
 async function loadLeaderboard(){
   const body = document.getElementById('leaderboard-body');
@@ -549,11 +646,18 @@ async function loadLeaderboard(){
   }
 }
 
+async function skipProblem(){
+  if(currentSlug) addSkip(currentSlug);
+  resetTimer();
+  await getRecommendation();
+}
+
 async function getRecommendation(){
   const content = document.getElementById('problem-content');
   content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">🤖 Agent analyzing your profile...</div>';
   try {
-    const res = await fetch(`/api/recommend/${USER_ID}?token=${TOKEN}`);
+    const skipped = [...getSkipped()].join(',');
+    const res = await fetch(`/api/recommend/${USER_ID}?token=${TOKEN}${skipped ? '&skipped='+skipped : ''}`);
     const data = await res.json();
     currentProblem = data;
     currentSlug = data.slug;
@@ -571,9 +675,10 @@ async function getRecommendation(){
       <div id="topic-reveal" style="display:none;margin-top:.75rem"></div>
       <div class="problem-actions" style="margin-top:1rem">
         <button class="btn" style="background:var(--green);color:#0d1117;font-weight:800;font-size:.9rem;padding:.6rem 1.4rem" onclick="logDone()">🎉 I'm Done!</button>
+        <button class="btn btn-help" style="font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="logDoneWithHelp()">🤝 With Help</button>
         <button class="btn" style="background:rgba(248,81,73,.2);color:var(--red);border:1px solid var(--red);font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="giveUp()">🏳️ Give Up</button>
         <button class="btn btn-primary" onclick="window.open('${data.leetcode_url}','_blank')">📝 LeetCode</button>
-        <button class="btn" style="background:var(--hover);color:var(--muted)" onclick="resetTimer();getRecommendation()">↻ Skip</button>
+        <button class="btn" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border)" onclick="skipProblem()">⏭ Skip</button>
       </div>
       ${data.reason ? `<div style="margin-top:.75rem;font-size:.75rem;color:var(--muted);font-style:italic">${data.reason}</div>` : ''}
     `;
@@ -655,8 +760,121 @@ function selectProblem(slug,title,difficulty){
   openLogModal(slug, title, difficulty);
 }
 
+// ── Readiness ────────────────────────────────────────────────────────────────
+let readinessData = null;
+let selectedCompany = null;
+
+async function loadReadiness(){
+  const body = document.getElementById('readiness-body');
+  if(readinessData){ renderReadiness(readinessData); return; }
+  body.innerHTML='<div style="text-align:center;padding:3rem;color:var(--muted)">🔍 Calculating your readiness report...</div>';
+  try {
+    const res = await fetch(`/api/readiness/${USER_ID}?token=${TOKEN}`);
+    readinessData = await res.json();
+    renderReadiness(readinessData);
+  } catch(e){
+    body.innerHTML='<div style="text-align:center;padding:2rem;color:var(--red)">Error loading readiness report</div>';
+  }
+}
+
+function scoreRingSVG(score, color, size=130){
+  const r=46, cx=60, cy=60;
+  const circ = 2*Math.PI*r;
+  const offset = circ - (score/100)*circ;
+  return `<svg viewBox="0 0 120 120" width="${size}" height="${size}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#21262d" stroke-width="12"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="12"
+      stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+      stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"
+      style="transition:stroke-dashoffset .8s ease"/>
+    <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="#e6edf3" font-size="22" font-weight="900" font-family="Inter,sans-serif">${score}%</text>
+  </svg>`;
+}
+
+function renderReadiness(d){
+  const body = document.getElementById('readiness-body');
+  const tier1 = Object.entries(d.companies).filter(([,c])=>c.tier===1);
+  const tier2 = Object.entries(d.companies).filter(([,c])=>c.tier===2);
+
+  function companyCards(list){
+    return list.map(([name,c])=>`
+      <div class="company-card${selectedCompany===name?' selected':''}" onclick="selectCompany('${name}')">
+        <div class="co-name">${name}</div>
+        <div class="co-score" style="color:${c.color}">${c.score}%</div>
+        <div class="co-label" style="color:${c.color}">${c.label}</div>
+        <div class="co-bar-bg"><div class="co-bar" style="width:${c.score}%;background:${c.color}"></div></div>
+      </div>`).join('');
+  }
+
+  const detailHtml = selectedCompany ? renderDetail(d.companies[selectedCompany], selectedCompany) : '';
+
+  body.innerHTML = `
+    <!-- Overall -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="card-top"><span class="card-title">🎓 Overall Interview Readiness</span></div>
+      <div class="readiness-overall">
+        <div class="score-ring-wrap">
+          ${scoreRingSVG(d.overall_score, d.overall_color)}
+          <span style="font-size:.72rem;font-weight:700;color:${d.overall_color}">${d.overall_label}</span>
+        </div>
+        <div class="readiness-text">
+          <h2 style="color:${d.overall_color}">${d.overall_label}</h2>
+          <p>${d.summary}</p>
+          <div class="readiness-pills">
+            <span class="r-pill">⚡ ELO ${d.overall_elo}</span>
+            <span class="r-pill">✅ ${d.solved}/${d.total} problems</span>
+            <span class="r-pill">📚 ${d.practiced_topics}/${d.total_topics} topics practiced</span>
+            <span class="r-pill">📊 ${d.overall_coverage}% coverage</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tier 1 -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="card-top"><span class="card-title">🏆 Tier 1 — Big Tech</span></div>
+      <div class="company-grid">${companyCards(tier1)}</div>
+      ${selectedCompany && d.companies[selectedCompany]?.tier===1 ? `<div id="detail-pane">${renderDetail(d.companies[selectedCompany], selectedCompany)}</div>` : ''}
+    </div>
+
+    <!-- Tier 2 -->
+    <div class="card">
+      <div class="card-top"><span class="card-title">🚀 Tier 2 — Top Growth Tech</span></div>
+      <div class="company-grid">${companyCards(tier2)}</div>
+      ${selectedCompany && d.companies[selectedCompany]?.tier===2 ? `<div id="detail-pane">${renderDetail(d.companies[selectedCompany], selectedCompany)}</div>` : ''}
+    </div>`;
+}
+
+function renderDetail(c, name){
+  const weakHtml = c.weak_topics.length
+    ? c.weak_topics.map(t=>`<span class="gap-tag">↑ ${t}</span>`).join('')
+    : '<span style="font-size:.75rem;color:var(--green)">✅ No major gaps</span>';
+  return `
+    <div class="detail-pane">
+      <h3>${name} — Detailed Breakdown</h3>
+      <div class="detail-grid">
+        <div class="detail-stat"><div class="n" style="color:${c.color}">${c.score}%</div><div class="l">Overall Score</div></div>
+        <div class="detail-stat"><div class="n">${c.avg_elo}</div><div class="l">Avg Topic ELO</div></div>
+        <div class="detail-stat"><div class="n">${c.elo_target}</div><div class="l">Target ELO</div></div>
+        ${c.total>0 ? `<div class="detail-stat"><div class="n">${c.solved}/${c.total}</div><div class="l">Problems Done</div></div>` : ''}
+        ${c.approx_problems>0 ? `<div class="detail-stat"><div class="n">~${c.approx_problems}</div><div class="l">Problems Left</div></div>` : ''}
+      </div>
+      <div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem">Focus Areas</div>
+      <div class="gap-tags">${weakHtml}</div>
+      <div class="detail-summary">${c.summary}</div>
+    </div>`;
+}
+
+function selectCompany(name){
+  selectedCompany = (selectedCompany === name) ? null : name;
+  renderReadiness(readinessData);
+}
+
+// ── Readiness end ─────────────────────────────────────────────────────────────
+
 // Load first recommendation on page load
 window.addEventListener('DOMContentLoaded', ()=>{
+  updateSkipBadge();
   {% if not attempts %}
   getRecommendation();
   {% endif %}

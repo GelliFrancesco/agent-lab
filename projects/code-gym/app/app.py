@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import wraps
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -93,8 +93,17 @@ def seed_users():
         db.commit()
     print(f"[{datetime.now().strftime('%H:%M')}] Seeded {len(default_users)} users")
 
+def migrate_db():
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE attempts ADD COLUMN with_help BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+
 seed_problems()
 seed_users()
+migrate_db()
 
 # ── ELO helpers ─────────────────────────────────────────────────────────────
 INITIAL_ELO = 1200
@@ -111,15 +120,25 @@ _ELO_CFG = {
                    win_fast=50,  win_norm=25, win_slow=10, lose=-10),
 }
 
-def compute_elo_delta(difficulty, attempts_count, time_minutes, gave_up, solved):
+def compute_elo_delta(difficulty, attempts_count, time_minutes, gave_up, solved, with_help=False):
     cfg = _ELO_CFG.get(difficulty, _ELO_CFG["Medium"])
     if not solved:
         return cfg["lose"]
+    if with_help:
+        return cfg["win_slow"]
     if attempts_count <= cfg["fast_attempts"] and time_minutes <= cfg["fast_time"]:
         return cfg["win_fast"]
     if attempts_count <= cfg["norm_attempts"] and time_minutes <= cfg["norm_time"]:
         return cfg["win_norm"]
     return cfg["win_slow"]
+
+def time_rating(difficulty, time_minutes):
+    cfg = _ELO_CFG.get(difficulty, _ELO_CFG["Medium"])
+    if time_minutes <= cfg["fast_time"]:
+        return "fast"
+    if time_minutes <= cfg["norm_time"]:
+        return "norm"
+    return "slow"
 
 def update_elo(user_id, topic, delta):
     db = get_db()
@@ -142,8 +161,147 @@ def topic_from_elo(elo):
     if elo >= 1100: return "Novice"
     return "Beginner"
 
+# ── Interview Readiness ──────────────────────────────────────────────────────
+
+COMPANY_PROFILES = {
+    # Tier 1 – FAANG / Big Tech
+    "Google":    {"elo_target": 1600, "tier": 1, "topics": ["arrays","graphs","dynamic-programming","strings","trees","binary-search"]},
+    "Meta":      {"elo_target": 1550, "tier": 1, "topics": ["arrays","trees","dynamic-programming","strings","graphs"]},
+    "Amazon":    {"elo_target": 1450, "tier": 1, "topics": ["arrays","trees","greedy","graphs","strings"]},
+    "Apple":     {"elo_target": 1450, "tier": 1, "topics": ["arrays","strings","trees","binary-search"]},
+    "Microsoft": {"elo_target": 1400, "tier": 1, "topics": ["arrays","strings","trees","dynamic-programming"]},
+    # Tier 2 – Top growth tech
+    "Netflix":   {"elo_target": 1500, "tier": 2, "topics": ["arrays","strings","dynamic-programming","trees","graphs"]},
+    "Stripe":    {"elo_target": 1500, "tier": 2, "topics": ["arrays","strings","dynamic-programming","trees"]},
+    "Airbnb":    {"elo_target": 1400, "tier": 2, "topics": ["arrays","trees","graphs","strings"]},
+    "Uber":      {"elo_target": 1450, "tier": 2, "topics": ["arrays","graphs","strings","greedy"]},
+    "LinkedIn":  {"elo_target": 1400, "tier": 2, "topics": ["arrays","strings","graphs","trees"]},
+}
+
+_READINESS_LABELS = [
+    (80, "Very Likely Ready",   "#3fb950"),
+    (65, "Strong Candidate",    "#58a6ff"),
+    (50, "Getting There",       "#d29922"),
+    (35, "Needs More Practice", "#db6d28"),
+    (0,  "Early Stage",         "#f85149"),
+]
+
+def score_label(score):
+    for threshold, label, color in _READINESS_LABELS:
+        if score >= threshold:
+            return label, color
+    return "Early Stage", "#f85149"
+
+def readiness_paragraph(score, weak_topics, approx_problems, company_name=None):
+    target = f"{company_name}" if company_name else "a general tech interview"
+    if score >= 80:
+        opener = f"You're in great shape for {target}."
+        detail = "Your skills are strong across key areas. Keep the momentum with a problem a day."
+    elif score >= 65:
+        opener = f"You're a competitive candidate for {target}."
+        gaps = ", ".join(weak_topics[:2]) if weak_topics else "advanced topics"
+        detail = f"A bit more depth in {gaps} would make you even stronger."
+    elif score >= 50:
+        opener = f"You're on the right track for {target}, but there's room to grow."
+        gaps = ", ".join(weak_topics[:2]) if weak_topics else "medium difficulty problems"
+        detail = f"Focus on building consistency in {gaps}."
+    elif score >= 35:
+        opener = f"More practice is needed before targeting {target}."
+        gaps = ", ".join(weak_topics[:2]) if weak_topics else "core data structures"
+        detail = f"Prioritize {gaps} — these appear in almost every loop."
+    else:
+        opener = f"You're in the early stages of interview prep."
+        detail = "Start with Easy problems to build confidence, then move to Mediums."
+    if approx_problems > 0:
+        days = max(5, approx_problems)
+        est = f" Roughly {approx_problems} more focused problems could close the gap — about {days} days at one problem a day."
+    else:
+        est = " Keep maintaining your skills with regular practice."
+    return f"{opener} {detail}{est}"
+
+def compute_readiness(user_id):
+    db = get_db()
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        return None
+
+    topic_elos = {te.topic: te.elo for te in db.query(TopicElo).filter_by(user_id=user_id).all()}
+    all_problems = db.query(Problem).all()
+
+    # Build solved / helped sets (problem_id based)
+    solved_ids, helped_ids = set(), set()
+    for a in db.query(Attempt).filter_by(user_id=user_id, solved=True).all():
+        (helped_ids if a.with_help else solved_ids).add(a.problem_id)
+
+    def weighted_coverage(problems):
+        if not problems:
+            return 0.0, 0, 0
+        ws = sum(p.importance * (1.0 if p.id in solved_ids else 0.5 if p.id in helped_ids else 0)
+                 for p in problems)
+        wt = sum(p.importance for p in problems)
+        touched = sum(1 for p in problems if p.id in solved_ids or p.id in helped_ids)
+        return (ws / wt * 100) if wt else 0.0, touched, len(problems)
+
+    def elo_component(avg_elo, target_elo):
+        return min(100, max(0, (avg_elo - MIN_ELO) / (target_elo - MIN_ELO) * 100))
+
+    # Per-company scores
+    companies_out = {}
+    for name, profile in COMPANY_PROFILES.items():
+        key_topics = profile["topics"]
+        target_elo = profile["elo_target"]
+
+        topic_elo_vals = [topic_elos.get(t, INITIAL_ELO) for t in key_topics]
+        avg_elo = sum(topic_elo_vals) / len(topic_elo_vals)
+        elo_pct = elo_component(avg_elo, target_elo)
+
+        # Coverage only for companies present in DB
+        co_problems = [p for p in all_problems if name in (p.companies or "").split(",")]
+        cov_pct, touched, total = weighted_coverage(co_problems)
+
+        score = round(0.5 * elo_pct + 0.5 * cov_pct) if total > 0 else round(elo_pct)
+
+        # Weak topics for this company (biggest ELO gap vs target)
+        topic_gaps = sorted([(t, target_elo - topic_elos.get(t, INITIAL_ELO)) for t in key_topics],
+                            key=lambda x: x[1], reverse=True)
+        weak = [t for t, gap in topic_gaps if gap > 80][:3]
+
+        approx = max(0, int((target_elo - avg_elo) / 15)) if avg_elo < target_elo else 0
+        label, color = score_label(score)
+        companies_out[name] = {
+            "score": score, "label": label, "color": color,
+            "elo_pct": round(elo_pct), "coverage": round(cov_pct),
+            "avg_elo": round(avg_elo), "elo_target": target_elo,
+            "solved": touched, "total": total,
+            "weak_topics": weak, "approx_problems": approx,
+            "tier": profile["tier"],
+            "summary": readiness_paragraph(score, weak, approx, name),
+        }
+
+    # Overall score
+    overall_elo = user.overall_elo()
+    overall_elo_pct = elo_component(overall_elo, 1500)
+    overall_cov, total_touched, total_probs = weighted_coverage(all_problems)
+    overall_score = round(0.5 * overall_elo_pct + 0.5 * overall_cov)
+
+    practiced = [t for t, e in topic_elos.items() if e > INITIAL_ELO + 50]
+    all_weak = sorted(topic_elos.items(), key=lambda x: x[1])
+    overall_weak = [t for t, e in all_weak if e < INITIAL_ELO + 100][:3]
+    approx_overall = max(0, int((1500 - overall_elo) / 15)) if overall_elo < 1500 else 0
+
+    label, color = score_label(overall_score)
+    return {
+        "overall_score": overall_score, "overall_label": label, "overall_color": color,
+        "overall_elo": round(overall_elo), "overall_coverage": round(overall_cov),
+        "solved": total_touched, "total": total_probs,
+        "practiced_topics": len(practiced), "total_topics": len(topic_elos),
+        "weak_topics": overall_weak, "approx_problems": approx_overall,
+        "summary": readiness_paragraph(overall_score, overall_weak, approx_overall),
+        "companies": companies_out,
+    }
+
 # ── Problem Selector ────────────────────────────────────────────────────────
-def select_next_problem(user_id):
+def select_next_problem(user_id, skipped_slugs=None):
     """Run problem selector directly (no subprocess)."""
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -154,7 +312,7 @@ def select_next_problem(user_id):
             return None
         # Remove non-serializable fields from profile
         clean_profile = {k: v for k, v in profile.items() if k != "solved_slugs"}
-        problem, reason = get_recommendation(user_id)
+        problem, reason = get_recommendation(user_id, skipped_slugs=skipped_slugs)
         if not problem:
             return {"reason": reason, "profile": clean_profile}
         return {
@@ -228,7 +386,8 @@ def user_dashboard(user_id):
 @app.route("/api/recommend/<int:user_id>")
 @require_auth
 def api_recommend(user_id):
-    result = select_next_problem(user_id)
+    skipped = [s for s in request.args.get("skipped", "").split(",") if s]
+    result = select_next_problem(user_id, skipped_slugs=skipped)
     if result:
         return jsonify(result)
     return jsonify({"error": "Could not generate recommendation"}), 500
@@ -243,6 +402,7 @@ def api_log_attempt(user_id):
     time_minutes = int(data.get("time_minutes", 0))
     gave_up = bool(data.get("gave_up", False))
     solved = bool(data.get("solved", False))
+    with_help = bool(data.get("with_help", False))
 
     problem = db.query(Problem).filter_by(slug=slug).first()
     if not problem:
@@ -257,7 +417,7 @@ def api_log_attempt(user_id):
 
     # Calculate delta — scaled by difficulty
     difficulty_str = problem.difficulty.value if hasattr(problem.difficulty, 'value') else str(problem.difficulty)
-    delta = compute_elo_delta(difficulty_str, attempts_count, time_minutes, gave_up, solved)
+    delta = compute_elo_delta(difficulty_str, attempts_count, time_minutes, gave_up, solved, with_help)
 
     elo_after = update_elo(user_id, primary_topic, delta)
 
@@ -269,18 +429,30 @@ def api_log_attempt(user_id):
         time_minutes=time_minutes,
         gave_up=gave_up,
         solved=solved,
+        with_help=with_help,
         elo_before=elo_before,
         elo_after=elo_after,
     )
     db.add(attempt)
     db.commit()
 
+    rating = time_rating(difficulty_str, time_minutes) if solved and not with_help else None
     return jsonify({
         "elo_before": elo_before,
         "elo_after": elo_after,
         "delta": delta,
-        "new_level": topic_from_elo(elo_after)
+        "new_level": topic_from_elo(elo_after),
+        "rating": rating,
+        "with_help": with_help,
     })
+
+@app.route("/api/readiness/<int:user_id>")
+@require_auth
+def api_readiness(user_id):
+    result = compute_readiness(user_id)
+    if not result:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(result)
 
 @app.route("/api/problems")
 @require_auth
