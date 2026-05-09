@@ -140,6 +140,54 @@ def time_rating(difficulty, time_minutes):
         return "norm"
     return "slow"
 
+# ── With-help feedback ───────────────────────────────────────────────────────
+_TOPIC_TIPS = {
+    "arrays":              "Arrays often come down to two-pointer or prefix-sum — spot the invariant you want to maintain.",
+    "strings":             "Strings frequently yield to a sliding-window or frequency map; ask what a 'valid window' looks like.",
+    "dynamic-programming": "For DP, define your state precisely and write the recurrence before touching code.",
+    "trees":               "Trees have clean recursive sub-structure — nail the base case, trust the recursive call for the rest.",
+    "graphs":              "Graphs: decide BFS vs DFS first, then track visited to avoid infinite loops.",
+    "binary-search":       "Binary search works whenever the answer space is monotonic — pin down your lo/hi boundaries.",
+    "greedy":              "Greedy: convince yourself a local-best choice never blocks the global optimum.",
+    "sorting":             "Once sorted, two-pointer or binary search usually unlocks the rest.",
+    "linked-lists":        "Fast/slow pointers handle cycle detection and midpoint problems elegantly.",
+    "stacks":              "Stacks shine for 'next greater element' and balanced-bracket patterns.",
+    "heaps":               "Heaps are the go-to for running median and top-K — know push/pop cost.",
+    "recursion":           "Trust the recursive call to handle the sub-problem; focus only on the current level.",
+    "queues":              "BFS + queue = shortest path in unweighted graphs — that pairing is worth memorising.",
+    "tries":               "Tries trade space for O(L) prefix lookups — useful whenever you search by prefix repeatedly.",
+    "bit-manipulation":    "Bit tricks (XOR, AND-mask, shift) are compact; read the bit pattern before writing code.",
+}
+
+def generate_help_feedback(problem, wrong_answers):
+    hint  = (problem.pattern_hint or "").strip()
+    topic = (problem.topics or "arrays").split(",")[0].strip().lower()
+    diff  = problem.difficulty.value
+
+    parts = []
+
+    if hint:
+        parts.append(f"Pattern: <strong>{hint}</strong>. Next time try to recognise it in the first few minutes — look for the key constraint that points to it.")
+
+    tip = _TOPIC_TIPS.get(topic)
+    if tip:
+        parts.append(tip)
+
+    if wrong_answers >= 3:
+        parts.append("Several WA submissions usually mean a systematic issue: write out 2–3 examples by hand before coding next time.")
+    elif wrong_answers == 2:
+        parts.append("Two wrong submissions often point to an edge case — check empty input, single element, and overflow.")
+    elif wrong_answers == 1:
+        parts.append("That one WA usually signals a boundary condition — double-check loop limits and off-by-one errors.")
+
+    if diff == "Hard" and not hint:
+        parts.append("Hard problems often combine two techniques; try to decompose the problem into independent sub-problems first.")
+
+    if not parts:
+        parts.append(f"Keep revisiting {topic} problems — pattern recognition builds with repetition.")
+
+    return " ".join(parts)
+
 def update_elo(user_id, topic, delta):
     db = get_db()
     te = db.query(TopicElo).filter_by(user_id=user_id, topic=topic).first()
@@ -399,7 +447,8 @@ def api_log_attempt(user_id):
     db = get_db()
     data = request.json
     slug = data.get("slug")
-    attempts_count = int(data.get("attempts_count", 1))
+    wrong_answers  = max(0, int(data.get("wrong_answers", 0)))
+    attempts_count = wrong_answers + 1   # WA count drives the attempts dimension of ELO
     time_minutes = int(data.get("time_minutes", 0))
     gave_up = bool(data.get("gave_up", False))
     solved = bool(data.get("solved", False))
@@ -437,14 +486,16 @@ def api_log_attempt(user_id):
     db.add(attempt)
     db.commit()
 
-    rating = time_rating(difficulty_str, time_minutes) if solved and not with_help else None
+    rating       = time_rating(difficulty_str, time_minutes) if solved and not with_help else None
+    help_feedback = generate_help_feedback(problem, wrong_answers) if solved and with_help else None
     return jsonify({
-        "elo_before": elo_before,
-        "elo_after": elo_after,
-        "delta": delta,
-        "new_level": topic_from_elo(elo_after),
-        "rating": rating,
-        "with_help": with_help,
+        "elo_before":    elo_before,
+        "elo_after":     elo_after,
+        "delta":         delta,
+        "new_level":     topic_from_elo(elo_after),
+        "rating":        rating,
+        "with_help":     with_help,
+        "help_feedback": help_feedback,
     })
 
 @app.route("/api/readiness/<int:user_id>")

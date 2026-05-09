@@ -603,22 +603,74 @@ async function autoTimeout(){
   } catch(e){ resetTimer(); alert('Error logging timeout'); }
 }
 
-async function logDone(withHelp=false){
+// ── Completion form (WA picker) ──────────────────────────────────────────────
+let _savedActionsHtml = null;
+let _pendingWithHelp  = false;
+let _currentWA        = 0;
+
+function showCompletionForm(withHelp){
   pauseTimer();
+  _pendingWithHelp = withHelp;
+  _currentWA = 0;
+  const actDiv = document.getElementById('problem-actions');
+  if(!actDiv){ logDone(withHelp, 0); return; }
+  _savedActionsHtml = actDiv.innerHTML;
+  const accent = withHelp ? 'var(--gold)' : 'var(--green)';
+  const accentBg = withHelp ? 'rgba(210,153,34,.18)' : 'var(--green)';
+  const confirmLabel = withHelp ? '🤝 Confirm With Help' : '✅ Confirm Done';
+  actDiv.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem;width:100%;box-sizing:border-box">
+      <div style="font-size:.75rem;color:var(--muted);font-weight:600;margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.05em">
+        ${withHelp ? '🤝 With Help · ' : ''}Wrong submissions before AC?
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.85rem">
+        <button class="btn" style="background:var(--surface);color:var(--text);padding:.3rem .75rem;font-size:1.2rem;line-height:1;border:1px solid var(--border)" onclick="adjustWA(-1)">−</button>
+        <span id="wa-count" style="font-size:1.6rem;font-weight:900;color:${accent};min-width:2rem;text-align:center">0</span>
+        <button class="btn" style="background:var(--surface);color:var(--text);padding:.3rem .75rem;font-size:1.2rem;line-height:1;border:1px solid var(--border)" onclick="adjustWA(1)">+</button>
+        <span id="wa-label" style="font-size:.78rem;color:var(--muted)">no wrong answers</span>
+      </div>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn" style="flex:1;background:${accentBg};color:${withHelp ? accent : '#0d1117'};font-weight:800;${withHelp ? 'border:1px solid var(--gold)' : ''}" onclick="confirmDone()">
+          ${confirmLabel}
+        </button>
+        <button class="btn" style="background:var(--surface);color:var(--muted);border:1px solid var(--border)" onclick="cancelCompletion()">Cancel</button>
+      </div>
+    </div>`;
+}
+function adjustWA(d){
+  _currentWA = Math.max(0, Math.min(20, _currentWA + d));
+  document.getElementById('wa-count').textContent = _currentWA;
+  const lbl = document.getElementById('wa-label');
+  if(lbl) lbl.textContent = _currentWA === 0 ? 'no wrong answers' : _currentWA === 1 ? '1 wrong answer' : `${_currentWA} wrong answers`;
+}
+function cancelCompletion(){
+  const actDiv = document.getElementById('problem-actions');
+  if(actDiv && _savedActionsHtml) actDiv.innerHTML = _savedActionsHtml;
+  // if timer was paused by showCompletionForm, leave it paused — user can restart manually
+}
+function confirmDone(){ logDone(_pendingWithHelp, _currentWA); }
+
+async function logDone(withHelp=false, wrongAnswers=0){
+  // Timer was already paused by showCompletionForm; capture times now
+  const time        = getElapsedMinutes();
+  const elapsedSecs = _elapsedSecs();
   if(!currentSlug){ resetTimer(); return; }
   removeFromSkips(currentSlug);
-  const time        = getElapsedMinutes(); // captured after pause — wall-clock accurate
-  const elapsedSecs = _elapsedSecs();      // for display
   try {
     const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({slug:currentSlug, solved:true, gave_up:false, time_minutes:time, attempts_count:1, with_help:withHelp})
+      body: JSON.stringify({
+        slug: currentSlug, solved: true, gave_up: false,
+        time_minutes: time, wrong_answers: wrongAnswers,
+        with_help: withHelp
+      })
     });
     const data = await res.json();
     const delta = data.delta || 0;
-    const sign = delta >= 0 ? '+' : '';
+    const sign  = delta >= 0 ? '+' : '';
     const difficulty = currentProblem ? currentProblem.difficulty : 'Medium';
+
     let ratingHtml = '';
     if(withHelp){
       ratingHtml = `<div style="margin:.5rem auto;display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(210,153,34,.15);color:var(--gold);border:1px solid rgba(210,153,34,.3)">🤝 With Help</div>`;
@@ -626,21 +678,37 @@ async function logDone(withHelp=false){
       const r = getTimeRating(difficulty, time);
       ratingHtml = `<div style="margin:.5rem auto;display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(88,166,255,.1);color:${r.color};border:1px solid ${r.color}40">${r.emoji} ${r.label}</div>`;
     }
+
+    const waNote = wrongAnswers > 0
+      ? `<div style="font-size:.72rem;color:var(--muted);margin-top:.25rem">${wrongAnswers} wrong submission${wrongAnswers>1?'s':''} before AC</div>`
+      : '';
+
+    const feedbackHtml = (withHelp && data.help_feedback)
+      ? `<div style="margin-top:1rem;padding:.85rem 1rem;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.25);border-radius:8px;font-size:.78rem;color:var(--text);line-height:1.5;text-align:left">
+           <div style="font-size:.65rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem">💡 Coaching tip</div>
+           ${data.help_feedback}
+         </div>`
+      : '';
+
     document.getElementById('problem-content').innerHTML = `
-      <div style="text-align:center;padding:2rem">
-        <div style="font-size:3rem;margin-bottom:.5rem">${withHelp ? '🤝' : '🎉'}</div>
-        <div style="font-size:1.1rem;font-weight:800;color:${withHelp ? 'var(--gold)' : 'var(--green)'};margin-bottom:.3rem">${withHelp ? 'Solved with Help' : 'Solved!'}</div>
-        ${ratingHtml}
-        <div style="font-size:.85rem;color:var(--muted);margin-top:.4rem">Time: ${formatTime(elapsedSecs)} · ELO: ${sign}${delta}</div>
-        <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
+      <div style="padding:1.5rem">
+        <div style="text-align:center">
+          <div style="font-size:3rem;margin-bottom:.5rem">${withHelp ? '🤝' : '🎉'}</div>
+          <div style="font-size:1.1rem;font-weight:800;color:${withHelp ? 'var(--gold)' : 'var(--green)'};margin-bottom:.3rem">${withHelp ? 'Solved with Help' : 'Solved!'}</div>
+          ${ratingHtml}
+          <div style="font-size:.85rem;color:var(--muted);margin-top:.4rem">Time: ${formatTime(elapsedSecs)} · ELO: ${sign}${delta}</div>
+          ${waNote}
+        </div>
+        ${feedbackHtml}
+        <div style="text-align:center;margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
       </div>`;
-    setTimeout(()=>{ resetTimer(); getRecommendation(); }, 2000);
+    setTimeout(()=>{ resetTimer(); getRecommendation(); }, withHelp ? 4500 : 2000);
   } catch(e){
     resetTimer();
     alert('Error logging attempt');
   }
 }
-function logDoneWithHelp(){ logDone(true); }
+function logDoneWithHelp(){ showCompletionForm(true); }
 
 const TIME_THRESHOLDS = {
   'Easy':   {fast:15, norm:30},
@@ -720,9 +788,9 @@ async function getRecommendation(){
         <span id="topic-toggle-btn" class="btn" style="font-size:.7rem;padding:.25rem .6rem;background:var(--surface2);color:var(--muted);cursor:pointer" onclick="toggleTopics(this,'${data.topics}','${data.companies}','${hint}')">👁 Show hint</span>
       </div>
       <div id="topic-reveal" style="display:none;margin-top:.75rem"></div>
-      <div class="problem-actions" style="margin-top:1rem">
-        <button class="btn" style="background:var(--green);color:#0d1117;font-weight:800;font-size:.9rem;padding:.6rem 1.4rem" onclick="logDone()">🎉 I'm Done!</button>
-        <button class="btn btn-help" style="font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="logDoneWithHelp()">🤝 With Help</button>
+      <div id="problem-actions" class="problem-actions" style="margin-top:1rem">
+        <button class="btn" style="background:var(--green);color:#0d1117;font-weight:800;font-size:.9rem;padding:.6rem 1.4rem" onclick="showCompletionForm(false)">🎉 I'm Done!</button>
+        <button class="btn btn-help" style="font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="showCompletionForm(true)">🤝 With Help</button>
         <button class="btn" style="background:rgba(248,81,73,.2);color:var(--red);border:1px solid var(--red);font-weight:700;font-size:.85rem;padding:.6rem 1rem" onclick="giveUp()">🏳️ Give Up</button>
         <button class="btn btn-primary" onclick="window.open('${data.leetcode_url}','_blank')">📝 LeetCode</button>
         <button class="btn" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border)" onclick="skipProblem()">⏭ Skip</button>
