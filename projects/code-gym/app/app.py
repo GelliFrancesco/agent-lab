@@ -176,6 +176,7 @@ COMPANY_PROFILES = {
     "Airbnb":    {"elo_target": 1400, "tier": 2, "topics": ["arrays","trees","graphs","strings"]},
     "Uber":      {"elo_target": 1450, "tier": 2, "topics": ["arrays","graphs","strings","greedy"]},
     "LinkedIn":  {"elo_target": 1400, "tier": 2, "topics": ["arrays","strings","graphs","trees"]},
+    "Visa":      {"elo_target": 1350, "tier": 2, "topics": ["arrays","strings","dynamic-programming","sorting","trees"]},
 }
 
 _READINESS_LABELS = [

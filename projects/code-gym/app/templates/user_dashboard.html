@@ -458,10 +458,14 @@ const TOKEN = "{{ token }}";
 let currentSlug = null;
 let currentProblem = null;
 let currentUrl = null;
-let timerSeconds = 0;
+// ── Timer (wall-clock based — survives page refreshes) ────────────────────────
+// We store the absolute start timestamp in sessionStorage so that if the tab
+// refreshes while the user is solving on LeetCode, the elapsed time is not lost.
+let timerAccMs   = 0;      // ms accumulated from previous paused runs
+let timerStartAt = null;   // Date.now() when the current run started; null = paused
 let timerInterval = null;
-let timerRunning = false;
-const TIMER_LIMIT = 7200; // 2 hours
+let timerRunning  = false;
+const TIMER_LIMIT = 7200;  // seconds (2 hours)
 
 function getSkipped(){ return new Set(JSON.parse(sessionStorage.getItem('skipped')||'[]')); }
 function saveSkipped(set){ sessionStorage.setItem('skipped', JSON.stringify([...set])); }
@@ -480,30 +484,74 @@ function formatTime(s){
   if(h>0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
-function updateTimerDisplay(){ document.getElementById('timer-display').textContent=formatTime(timerSeconds); }
+// Compute elapsed ms from wall-clock (not a counter) — accurate after refreshes
+function _elapsedMs(){ return timerAccMs + (timerStartAt ? (Date.now() - timerStartAt) : 0); }
+function _elapsedSecs(){ return Math.floor(_elapsedMs() / 1000); }
+function getElapsedMinutes(){ return Math.ceil(_elapsedMs() / 60000); }
+
+function _saveTimer(){
+  sessionStorage.setItem('timerState', JSON.stringify({
+    accMs: timerAccMs, startAt: timerStartAt, running: timerRunning
+  }));
+}
+function _restoreTimer(){
+  try {
+    const s = JSON.parse(sessionStorage.getItem('timerState') || 'null');
+    if(!s) return;
+    timerAccMs = s.accMs || 0;
+    if(s.running && s.startAt){
+      // Timer was running before the refresh — resume from stored start timestamp
+      timerStartAt = s.startAt;
+      timerRunning = true;
+      document.getElementById('timer-start').disabled = true;
+      document.getElementById('timer-pause').disabled = false;
+      timerInterval = setInterval(_tick, 500);
+    }
+    updateTimerDisplay();
+  } catch(e){}
+}
+function _tick(){
+  updateTimerDisplay();
+  if(_elapsedSecs() >= TIMER_LIMIT) autoTimeout();
+}
+function updateTimerDisplay(){
+  document.getElementById('timer-display').textContent = formatTime(_elapsedSecs());
+}
 function startTimer(){
   if(timerRunning) return;
-  timerRunning=true;
-  document.getElementById('timer-start').disabled=true;
-  document.getElementById('timer-pause').disabled=false;
-  timerInterval=setInterval(()=>{
-    timerSeconds++;
-    updateTimerDisplay();
-    if(timerSeconds >= TIMER_LIMIT) autoTimeout();
-  },1000);
+  timerRunning = true;
+  timerStartAt = Date.now();
+  document.getElementById('timer-start').disabled = true;
+  document.getElementById('timer-pause').disabled = false;
+  timerInterval = setInterval(_tick, 500);
+  _saveTimer();
   if(currentUrl) window.open(currentUrl, '_blank');
 }
 function pauseTimer(){
   if(!timerRunning) return;
-  timerRunning=false;
+  timerAccMs   = _elapsedMs();  // freeze accumulated ms
+  timerStartAt = null;
+  timerRunning = false;
   clearInterval(timerInterval);
-  document.getElementById('timer-start').disabled=false;
-  document.getElementById('timer-pause').disabled=true;
+  timerInterval = null;
+  try {
+    document.getElementById('timer-start').disabled = false;
+    document.getElementById('timer-pause').disabled = true;
+  } catch(e){}
+  _saveTimer();
 }
 function resetTimer(){
-  pauseTimer();
-  timerSeconds=0;
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerAccMs   = 0;
+  timerStartAt = null;
+  timerRunning = false;
+  try {
+    document.getElementById('timer-start').disabled = false;
+    document.getElementById('timer-pause').disabled = true;
+  } catch(e){}
   updateTimerDisplay();
+  _saveTimer();
 }
 function removeFromSkips(slug){ const s=getSkipped(); s.delete(slug); saveSkipped(s); updateSkipBadge(); }
 
@@ -511,7 +559,8 @@ async function giveUp(){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
   removeFromSkips(currentSlug);
-  const time = getElapsedMinutes();
+  const time = getElapsedMinutes();       // captured after pause — accurate
+  const elapsedSecs = _elapsedSecs();     // for display
   fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -523,10 +572,10 @@ async function giveUp(){
       <div style="text-align:center;padding:2rem">
         <div style="font-size:3rem;margin-bottom:.5rem">🏳️</div>
         <div style="font-size:1.1rem;font-weight:800;color:var(--red);margin-bottom:.3rem">Given Up</div>
-        <div style="font-size:.85rem;color:var(--muted)">Time: ${formatTime(timerSeconds)} · ELO: ${sign}${delta}</div>
+        <div style="font-size:.85rem;color:var(--muted)">Time: ${formatTime(elapsedSecs)} · ELO: ${sign}${delta}</div>
         <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
       </div>`;
-    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 1500);
+    setTimeout(()=>{ resetTimer(); getRecommendation(); }, 1500);
   }).catch(()=>{ resetTimer(); alert('Error logging attempt'); });
 }
 
@@ -550,7 +599,7 @@ async function autoTimeout(){
         <div style="font-size:.85rem;color:var(--muted)">Time: 2:00:00 · ELO: ${sign}${delta}</div>
         <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
       </div>`;
-    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 2000);
+    setTimeout(()=>{ resetTimer(); getRecommendation(); }, 2000);
   } catch(e){ resetTimer(); alert('Error logging timeout'); }
 }
 
@@ -558,8 +607,8 @@ async function logDone(withHelp=false){
   pauseTimer();
   if(!currentSlug){ resetTimer(); return; }
   removeFromSkips(currentSlug);
-  const time = getElapsedMinutes();
-  const elapsed = timerSeconds;
+  const time        = getElapsedMinutes(); // captured after pause — wall-clock accurate
+  const elapsedSecs = _elapsedSecs();      // for display
   try {
     const res = await fetch(`/api/log_attempt/${USER_ID}?token=${TOKEN}`, {
       method:'POST',
@@ -567,7 +616,6 @@ async function logDone(withHelp=false){
       body: JSON.stringify({slug:currentSlug, solved:true, gave_up:false, time_minutes:time, attempts_count:1, with_help:withHelp})
     });
     const data = await res.json();
-    resetTimer();
     const delta = data.delta || 0;
     const sign = delta >= 0 ? '+' : '';
     const difficulty = currentProblem ? currentProblem.difficulty : 'Medium';
@@ -583,17 +631,16 @@ async function logDone(withHelp=false){
         <div style="font-size:3rem;margin-bottom:.5rem">${withHelp ? '🤝' : '🎉'}</div>
         <div style="font-size:1.1rem;font-weight:800;color:${withHelp ? 'var(--gold)' : 'var(--green)'};margin-bottom:.3rem">${withHelp ? 'Solved with Help' : 'Solved!'}</div>
         ${ratingHtml}
-        <div style="font-size:.85rem;color:var(--muted);margin-top:.4rem">Time: ${formatTime(elapsed)} · ELO: ${sign}${delta}</div>
+        <div style="font-size:.85rem;color:var(--muted);margin-top:.4rem">Time: ${formatTime(elapsedSecs)} · ELO: ${sign}${delta}</div>
         <div style="margin-top:1rem;font-size:.8rem;color:var(--cyan)">↻ Getting next problem...</div>
       </div>`;
-    setTimeout(()=>{ timerSeconds=0; updateTimerDisplay(); getRecommendation(); }, 2000);
+    setTimeout(()=>{ resetTimer(); getRecommendation(); }, 2000);
   } catch(e){
     resetTimer();
     alert('Error logging attempt');
   }
 }
 function logDoneWithHelp(){ logDone(true); }
-function getElapsedMinutes(){ return Math.ceil(timerSeconds/60); }
 
 const TIME_THRESHOLDS = {
   'Easy':   {fast:15, norm:30},
@@ -875,6 +922,7 @@ function selectCompany(name){
 // Load first recommendation on page load
 window.addEventListener('DOMContentLoaded', ()=>{
   updateSkipBadge();
+  _restoreTimer();   // re-attach wall-clock timer if the page refreshed mid-session
   {% if not attempts %}
   getRecommendation();
   {% endif %}
